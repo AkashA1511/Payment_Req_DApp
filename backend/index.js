@@ -1,5 +1,86 @@
+// const express = require("express");
+// const { Web3 } = require("web3");
+// const app = express();
+// const cors = require("cors");
+// require("dotenv").config();
+// const port = 3001;
+// const ABI = require("./abi.json");
+
+// app.use(cors());
+// app.use(express.json());
+
+// const web3 = new Web3(new Web3.providers.HttpProvider(process.env.RPC_URL));
+
+// function convertArrayToObjects(arr) {
+//   const dataArray = arr.map((transaction, index) => ({
+//     key: (arr.length + 1 - index).toString(),
+//     type: transaction[0],
+//     amount: transaction[1],
+//     message: transaction[2],
+//     address: `${transaction[3].slice(0, 4)}...${transaction[3].slice(0, 4)}`,
+//     subject: transaction[4],
+//   }));
+
+//   return dataArray.reverse();
+// }
+
+// app.get("/getNameAndBalance", async (req, res) => {
+//   try {
+//     const { userAddress } = req.query;
+
+//     const contract = new web3.eth.Contract(ABI, "0x80C756A8Be0335CFa4D9cE9c7C87bDB8cd8b4cC8");
+    
+//   await contract.methods.getMyName(userAddress).call();
+
+    
+//     const nameResponse = await contract.methods.getMyName(userAddress).call();
+//     const name = nameResponse.name;
+
+//     const balance = await web3.eth.getBalance(userAddress);
+//     const balanceInEth = web3.utils.fromWei(balance, "ether");
+
+//     const tokenPrice = await fetchTokenPrice("0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0");
+//     const balanceInDollars = balanceInEth * tokenPrice;
+
+    
+//     const history = await getMyHistory(userAddress);
+
+    
+//     const requests = await getMyRequests(userAddress);
+
+//     const jsonResponse = {
+//       name,
+//       balance: balanceInEth,
+//       dollars: balanceInDollars.toFixed(2),
+//       history,
+//       requests,
+//     };
+
+//     return res.status(200).json(jsonResponse);
+//   } catch (error) {
+//     console.error("Error:", error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
+// async function fetchTokenPrice(tokenAddress) {
+  
+// }
+
+// async function getMyHistory(userAddress) {
+//   // Logic to call contract function to get history
+// }
+
+// async function getMyRequests(userAddress) {
+//   // Logic to call contract function to get requests
+// }
+
+// app.listen(port, () => {
+//   console.log(`Listening for API Calls`);
+// });
+
 const express = require("express");
-const Moralis = require("moralis").default;
+const { Web3 } = require("web3");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
@@ -9,13 +90,20 @@ const ABI = require("./abi.json");
 app.use(cors());
 app.use(express.json());
 
+const web3 = new Web3(new Web3.providers.HttpProvider(process.env.RPC_URL));
+
 function convertArrayToObjects(arr) {
+  if (!Array.isArray(arr)) {
+    console.error("convertArrayToObjects error: Input is not an array", arr);
+    return [];
+  }
+
   const dataArray = arr.map((transaction, index) => ({
     key: (arr.length + 1 - index).toString(),
     type: transaction[0],
     amount: transaction[1],
     message: transaction[2],
-    address: `${transaction[3].slice(0,4)}...${transaction[3].slice(0,4)}`,
+    address: `${transaction[3].slice(0, 4)}...${transaction[3].slice(-4)}`,
     subject: transaction[4],
   }));
 
@@ -23,72 +111,57 @@ function convertArrayToObjects(arr) {
 }
 
 app.get("/getNameAndBalance", async (req, res) => {
-  const { userAddress } = req.query;
+  try {
+    const { userAddress } = req.query;
+    const contract = new web3.eth.Contract(ABI, "0x80C756A8Be0335CFa4D9cE9c7C87bDB8cd8b4cC8");
 
-  const response = await Moralis.EvmApi.utils.runContractFunction({
-    chain: "0x13881",
-    address: "0x80C756A8Be0335CFa4D9cE9c7C87bDB8cd8b4cC8",
-    functionName: "getMyName",
-    abi: ABI,
-    params: { _user: userAddress },
-  });
+    const nameResponse = await contract.methods.getMyName(userAddress).call();
+    const name = nameResponse;
 
-  const jsonResponseName = response.raw;
+    const balance = await web3.eth.getBalance(userAddress);
+    const balanceInEth = web3.utils.fromWei(balance, "ether");
 
-  const secResponse = await Moralis.EvmApi.balance.getNativeBalance({
-    chain: "0x13881",
-    address: userAddress,
-  });
+    const history = await getMyHistory(userAddress);
+    const requests = await getMyRequests(userAddress);
 
-  const jsonResponseBal = (secResponse.raw.balance / 1e18).toFixed(2);
+    const jsonResponse = {
+      name,
+      balance: balanceInEth,
+      history,
+      requests,
+    };
 
-  const thirResponse = await Moralis.EvmApi.token.getTokenPrice({
-    address: "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0",
-  });
-
-  const jsonResponseDollars = (
-    thirResponse.raw.usdPrice * jsonResponseBal
-  ).toFixed(2);
-
-  const fourResponse = await Moralis.EvmApi.utils.runContractFunction({
-    chain: "0x13881",
-    address: "0x80C756A8Be0335CFa4D9cE9c7C87bDB8cd8b4cC8",
-    functionName: "getMyHistory",
-    abi: ABI,
-    params: { _user: userAddress },
-  });
-
-  const jsonResponseHistory = convertArrayToObjects(fourResponse.raw);
-
-
-  const fiveResponse = await Moralis.EvmApi.utils.runContractFunction({
-    chain: "0x13881",
-    address: "0x80C756A8Be0335CFa4D9cE9c7C87bDB8cd8b4cC8",
-    functionName: "getMyRequests",
-    abi: ABI,
-    params: { _user: userAddress },
-  });
-
-  const jsonResponseRequests = fiveResponse.raw;
-
-
-  const jsonResponse = {
-    name: jsonResponseName,
-    balance: jsonResponseBal,
-    dollars: jsonResponseDollars,
-    history: jsonResponseHistory,
-    requests: jsonResponseRequests,
-  };
-
-  return res.status(200).json(jsonResponse);
+    return res.status(200).json(jsonResponse);
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
+async function getMyHistory(userAddress) {
+  try {
+    const contract = new web3.eth.Contract(ABI, "0x80C756A8Be0335CFa4D9cE9c7C87bDB8cd8b4cC8");
+    const history = await contract.methods.getMyHistory(userAddress).call();
+    console.log("Raw history data:", history); // Debugging line
+    return convertArrayToObjects(history);
+  } catch (error) {
+    console.error("Error fetching history:", error);
+    throw new Error("Failed to fetch history");
+  }
+}
 
+async function getMyRequests(userAddress) {
+  try {
+    const contract = new web3.eth.Contract(ABI, "0x80C756A8Be0335CFa4D9cE9c7C87bDB8cd8b4cC8");
+    const requests = await contract.methods.getMyRequests(userAddress).call();
+    console.log("Raw requests data:", requests); // Debugging line
+    return convertArrayToObjects(requests);
+  } catch (error) {
+    console.error("Error fetching requests:", error);
+    throw new Error("Failed to fetch requests");
+  }
+}
 
-Moralis.start({
-  apiKey: process.env.MORALIS_KEY,
-}).then(() => {
-  app.listen(port, () => {
-    console.log(`Listening for API Calls`);
-  });
+app.listen(port, () => {
+  console.log(`Listening for API Calls on port ${port}`);
 });
